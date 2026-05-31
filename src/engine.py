@@ -1,12 +1,18 @@
 """CADreader核心引擎
 
 基于PHT-CAD的工程图纸解析引擎
+集成了ezdxf_parser用于DXF/DWG文件解析
 """
 
 import json
+import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Union, Any
+from dataclasses import dataclass, asdict
+
+from .parsers import DWGParser, DeviceExtractor, TopologyBuilder, CoordExtractor
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -149,38 +155,77 @@ class CADReader:
     def _parse_dxf(self, path: Path) -> ParsedDrawing:
         """解析DXF格式图纸
 
-        使用ezdxf库解析DXF文件结构
+        使用DWGParser + ezdxf解析DXF/DWG文件结构
+        提取几何图元（线、圆、弧等）和文本标注
         """
         try:
             import ezdxf
         except ImportError:
             raise RuntimeError("请先安装ezdxf: pip install ezdxf")
 
-        # TODO: 实现DXF解析
-        doc = ezdxf.readfile(str(path))
-        msp = doc.modelspace()
-
         primitives = []
-        for entity in msp:
-            if entity.dxftype() == 'LINE':
-                primitives.append(Primitive(
-                    type='line',
-                    params=list(entity.dxf.start) + list(entity.dxf.end),
-                    layer=entity.dxf.layer
+        annotations = []
+
+        # 使用DWGParser解析文件
+        with DWGParser(str(path)) as parser:
+            # 提取几何图元
+            for entity in parser.iter_entities(['LINE', 'CIRCLE', 'ARC', 'POLYLINE', 'LWPOLYLINE']):
+                if entity.dxftype() == 'LINE':
+                    primitives.append(Primitive(
+                        type='line',
+                        params=[entity.dxf.start.x, entity.dxf.start.y,
+                                entity.dxf.end.x, entity.dxf.end.y],
+                        layer=getattr(entity.dxf, 'layer', '0')
+                    ))
+                elif entity.dxftype() == 'CIRCLE':
+                    primitives.append(Primitive(
+                        type='circle',
+                        params=[entity.dxf.center.x, entity.dxf.center.y, entity.dxf.radius],
+                        layer=getattr(entity.dxf, 'layer', '0')
+                    ))
+                elif entity.dxftype() == 'ARC':
+                    primitives.append(Primitive(
+                        type='arc',
+                        params=[entity.dxf.center.x, entity.dxf.center.y, entity.dxf.radius,
+                                entity.dxf.start_angle, entity.dxf.end_angle],
+                        layer=getattr(entity.dxf, 'layer', '0')
+                    ))
+
+            # 提取文本标注
+            texts = parser.get_texts()
+            for text in texts:
+                annotations.append(Annotation(
+                    type='text',
+                    value=text.get('text', ''),
+                    linked_to=[],
+                    layer=text.get('layer', '0')
                 ))
-            elif entity.dxftype() == 'CIRCLE':
+
+            # 提取块引用（设备）
+            blocks = parser.get_blocks()
+            for block in blocks:
+                # 块引用作为特殊图元
                 primitives.append(Primitive(
-                    type='circle',
-                    params=list(entity.dxf.center) + [entity.dxf.radius],
-                    layer=entity.dxf.layer
+                    type='block',
+                    params=list(block.get('location', (0, 0, 0))),
+                    layer=block.get('name', 'unknown')
                 ))
-            # ... 其他图元类型
+
+        # 统计图层
+        layers = list(set(p.layer for p in primitives if p.layer))
 
         return ParsedDrawing(
             primitives=primitives,
-            annotations=[],
+            annotations=annotations,
             constraints=[],
-            metadata={"source": str(path), "type": "dxf", "version": doc.version}
+            metadata={
+                "source": str(path),
+                "type": "dxf",
+                "format": "DXF",
+                "layers": layers,
+                "primitive_count": len(primitives),
+                "annotation_count": len(annotations)
+            }
         )
 
     def _parse_pdf(self, path: Path) -> ParsedDrawing:

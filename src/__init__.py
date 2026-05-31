@@ -8,5 +8,6 @@ __author__ = "CADreader Team"
 __license__ = "MIT"
 
 from .engine import CADReader
+from .parsers import DWGParser, DeviceExtractor, TopologyBuilder, CoordExtractor
 
-__all__ = ["CADReader"]
+__all__ = ["CADReader", "DWGParser", "DeviceExtractor", "TopologyBuilder", "CoordExtractor"]

@@ -147,11 +147,37 @@ connector.upload_result(result, doc_id="<飞书文档ID>")
 
 ## 下一步计划
 
-- [ ] 研究PHT-CAD代码结构
-- [ ] 设计CADreader核心引擎
+- [x] 研究PHT-CAD代码结构 - PHT-CAD为学术项目，仅含README和图片，无可运行代码
+- [x] 迁移ezdxf_parser工具 - 从首山环保平台tools迁移DXF解析模块到src/parsers/
+- [x] 实现DXF解析功能 - 使用DWGParser集成到CADReader._parse_dxf()
+- [ ] 实现图像解析功能 - 基于PHT-CAD的VLM图像推理
 - [ ] 开发与wiki的集成接口
 - [ ] 开发与FeiShuCLI的集成接口
+- [ ] 测试与现有skills的集成
 - [ ] 编写使用文档和API文档
+
+---
+
+## 开发进度
+
+### 已完成
+1. **PHT-CAD研究** - 确认PHT-CAD为纯学术项目，只有预训练模型权重，无可运行代码
+2. **DXF解析模块迁移** - 从首山环保平台迁移ezdxf_parser，包含：
+   - `DWGParser`: DXF/DWG文件基础解析器
+   - `DeviceExtractor`: 设备信息提取器
+   - `TopologyBuilder`: 网络拓扑构建器
+   - `CoordExtractor`: 坐标提取器
+   - `parse_network.py`: 网络系统图专项解析
+3. **CADReader集成** - engine.py已集成DWGParser，实现DXF文件解析
+
+### 进行中
+- DXF解析功能测试
+
+### 待开发
+- PHT-CAD图像推理（需要预训练模型）
+- PDF解析功能
+- 飞书集成
+- Wiki集成
 
 ---
 
