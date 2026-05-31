@@ -9,6 +9,7 @@ __license__ = "MIT"
 
 from .engine import CADReader, ParsedDrawing, Primitive, Annotation, Constraint
 from .parsers import DWGParser, DeviceExtractor, TopologyBuilder, CoordExtractor
+from .pdf_parser import PDFParser, parse_pdf_structure, render_pdf_page
 
 __all__ = [
     "CADReader",
@@ -19,5 +20,8 @@ __all__ = [
     "DWGParser",
     "DeviceExtractor",
     "TopologyBuilder",
-    "CoordExtractor"
+    "CoordExtractor",
+    "PDFParser",
+    "parse_pdf_structure",
+    "render_pdf_page"
 ]

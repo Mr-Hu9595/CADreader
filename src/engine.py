@@ -13,6 +13,7 @@ from dataclasses import dataclass, asdict
 
 from .parsers import DWGParser, DeviceExtractor, TopologyBuilder, CoordExtractor
 from .vlm_parser import DXFToImageRenderer, parse_with_vlm as vlm_parse_dxf
+from .pdf_parser import PDFParser, parse_pdf_structure, render_pdf_page
 
 logger = logging.getLogger(__name__)
 
@@ -287,16 +288,84 @@ class CADReader:
     def _parse_pdf(self, path: Path) -> ParsedDrawing:
         """解析PDF格式图纸
 
-        1. PDF转图像
-        2. 使用PHT-CAD解析
+        使用PDFParser提取文本、图像信息
         """
-        # TODO: 实现PDF转图像 + PHT-CAD解析
+        try:
+            import fitz
+        except ImportError:
+            raise RuntimeError("请先安装PyMuPDF: pip install pymupdf")
+
+        parser = PDFParser(str(path))
+        annotations = []
+        metadata_info = {}
+
+        with parser:
+            page_count = parser.get_page_count()
+            text_count = 0
+            image_count = 0
+
+            # 解析第一页（可扩展为解析所有页）
+            for page_num in range(page_count):
+                page = parser.parse_page(page_num)
+                text_count += len(page.text_blocks)
+                image_count += len(page.images)
+
+                # 收集文本标注
+                for tb in page.text_blocks:
+                    if tb.text.strip():
+                        annotations.append(Annotation(
+                            type='text',
+                            value=tb.text,
+                            linked_to=[],
+                            layer=None
+                        ))
+
+                metadata_info[f"page_{page_num}_size"] = {
+                    "width": page.width,
+                    "height": page.height
+                }
+
         return ParsedDrawing(
             primitives=[],
-            annotations=[],
+            annotations=annotations,
             constraints=[],
-            metadata={"source": str(path), "type": "pdf"}
+            metadata={
+                "source": str(path),
+                "type": "pdf",
+                "format": "PDF",
+                "page_count": page_count,
+                "text_count": text_count,
+                "image_count": image_count,
+                "page_sizes": metadata_info
+            }
         )
+
+    def parse_pdf_with_vlm(self, pdf_path: Union[str, Path], output_dir: Optional[str] = None) -> Dict:
+        """使用VLM增强解析PDF图纸
+
+        Args:
+            pdf_path: PDF文件路径
+            output_dir: 输出目录（可选）
+
+        Returns:
+            Dict: VLM解析结果
+        """
+        pdf_path = Path(pdf_path)
+        if output_dir:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 渲染PDF为图像
+        if output_dir:
+            image_path = str(output_dir / f"{pdf_path.stem}.png")
+        else:
+            image_path = str(pdf_path.with_suffix('.png'))
+
+        render_pdf_page(str(pdf_path), page_num=0, output_path=image_path, dpi=200)
+        logger.info(f"PDF已渲染为图像: {image_path}")
+
+        # 使用VLM分析
+        return vlm_parse_dxf(str(pdf_path.with_suffix('.dxf')), str(output_dir) if output_dir else None)
 
     def parse_batch(self, input_dir: Union[str, Path], output_dir: Optional[Union[str, Path]] = None) -> List[ParsedDrawing]:
         """批量解析图纸
