@@ -47,44 +47,44 @@ cadreader/
 ├── README.md                 ← 项目说明
 ├── LICENSE                  ← 开源许可证
 ├── requirements.txt         ← Python依赖
-├── setup.py                 ← 安装脚本
+├── .gitignore              ← Git忽略配置
 ├── src/
-│   ├── __init__.py
-│   ├── engine.py            ← 核心解析引擎
-│   ├── parser.py            ← 多格式解析器(DXF/PDF/图像)
-│   ├── extractor.py         ← 图元提取器
-│   └── integrator.py        ← 与其他skills的集成模块
-├── docs/
-│   ├── architecture.md      ← 架构设计
-│   ├── integration.md       ← 集成指南
-│   └── api.md               ← API文档
-├── reports/
-│   └── PHT-CAD详细调研报告.md  ← PHT-CAD项目调研
-├── test/
-│   └── test_engine.py       ← 单元测试
-├── data/
-│   └── samples/             ← 示例图纸
+│   ├── __init__.py        ← 包入口，导出CADReader等
+│   ├── engine.py           ← 核心解析引擎（支持规则+VLM双模式）
+│   ├── vlm_parser.py       ← VLM增强解析（MiniMax understand_image）
+│   └── parsers/            ← ezdxf_parser模块
+│       ├── __init__.py
+│       ├── dwg_parser.py   ← DXF/DWG基础解析器
+│       ├── device_extractor.py ← 设备信息提取
+│       ├── topology_builder.py ← 网络拓扑构建
+│       ├── coord_extractor.py  ← 坐标提取
+│       └── parse_network.py   ← 网络系统图解析
 ├── integration/
-│   ├── wiki_connector.py    ← wiki知识库集成
-│   ├── feishu_connector.py  ← 飞书集成
-│   └── quota_connector.py   ← 定额匹配集成
-└── scripts/
-    ├── parse_drawing.py     ← 单图解析脚本
-    └── batch_parse.py       ← 批量解析脚本
+│   ├── __init__.py
+│   ├── wiki_connector.py   ← Wiki知识库集成
+│   ├── feishu_connector.py ← 飞书集成
+│   └── quota_connector.py  ← 定额匹配集成
+├── reports/
+│   └── PHT-CAD详细调研报告.md ← PHT-CAD项目调研
+├── data/                   ← 示例数据和测试输出
+│   └── samples/
+└── test/
+    └── test_engine.py     ← 单元测试
 ```
 
 ---
 
 ## 技术栈
 
-| 组件 | 技术 |
-|------|------|
-| **核心模型** | PHT-CAD（VLM + 四回归头） |
-| **VLM基座** | QwenVL / LLaVA |
-| **DXF解析** | ezdxf |
-| **PDF处理** | pdf2dxf / PyMuPDF |
-| **飞书集成** | FeiShuCLI (lark-cli) |
-| **数据存储** | JSON / CSV / 飞书表格 |
+| 组件 | 技术 | 状态 |
+|------|------|------|
+| **核心引擎** | CADReader（规则引擎） | ✅ 已实现 |
+| **VLM增强** | MiniMax understand_image | ✅ 已实现 |
+| **中文字体** | Microsoft YaHei | ✅ 已支持 |
+| **DXF解析** | ezdxf + DWGParser | ✅ 已实现 |
+| **图像渲染** | matplotlib | ✅ 已实现 |
+| **PDF处理** | PyMuPDF | 🔜 待实现 |
+| **飞书集成** | FeiShuCLI (lark-cli) | 🔜 待实现 |
 
 ---
 
@@ -150,8 +150,9 @@ connector.upload_result(result, doc_id="<飞书文档ID>")
 - [x] 研究PHT-CAD代码结构 - PHT-CAD为学术项目，仅含README和图片，无可运行代码
 - [x] 迁移ezdxf_parser工具 - 从首山环保平台tools迁移DXF解析模块到src/parsers/
 - [x] 实现DXF解析功能 - 使用DWGParser集成到CADReader._parse_dxf()
-- [ ] 实现图像解析功能 - 基于PHT-CAD的VLM图像推理
-- [ ] 开发与wiki的集成接口
+- [x] 实现VLM增强解析 - 使用MiniMax understand_image解析DXF图像
+- [x] 解决中文字体问题 - 使用Microsoft YaHei字体支持中文渲染
+- [ ] 实现PDF解析功能 - PDF转图像 + VLM分析
 - [ ] 开发与FeiShuCLI的集成接口
 - [ ] 测试与现有skills的集成
 - [ ] 编写使用文档和API文档
@@ -161,23 +162,39 @@ connector.upload_result(result, doc_id="<飞书文档ID>")
 ## 开发进度
 
 ### 已完成
-1. **PHT-CAD研究** - 确认PHT-CAD为纯学术项目，只有预训练模型权重，无可运行代码
-2. **DXF解析模块迁移** - 从首山环保平台迁移ezdxf_parser，包含：
-   - `DWGParser`: DXF/DWG文件基础解析器
-   - `DeviceExtractor`: 设备信息提取器
-   - `TopologyBuilder`: 网络拓扑构建器
-   - `CoordExtractor`: 坐标提取器
-   - `parse_network.py`: 网络系统图专项解析
-3. **CADReader集成** - engine.py已集成DWGParser，实现DXF文件解析
 
-### 进行中
-- DXF解析功能测试
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| PHT-CAD研究 | reports/ | 确认PHT-CAD为纯学术项目，无公开模型权重 |
+| DXF解析模块 | src/parsers/ | 从首山环保平台迁移ezdxf_parser |
+| CADReader核心 | src/engine.py | 支持规则引擎解析 |
+| VLM增强 | src/vlm_parser.py | 使用MiniMax understand_image |
+| 中文字体 | src/vlm_parser.py | Microsoft YaHei字体支持 |
+| GitHub同步 | - | 已推送至Mr-Hu9595/CADreader |
+
+### 已实现API
+
+```python
+from cadreader import CADReader
+
+reader = CADReader()
+
+# 规则引擎解析（快速）
+result = reader.parse("图纸.dxf")  # 返回ParsedDrawing
+
+# VLM增强解析（智能）
+vlm_result = reader.parse_with_vlm("图纸.dxf", output_dir="./output")
+
+# 渲染图纸为图像
+image_path = reader.parse_to_image("图纸.dxf", "output.png")
+```
 
 ### 待开发
-- PHT-CAD图像推理（需要预训练模型）
+
 - PDF解析功能
 - 飞书集成
 - Wiki集成
+- 批量处理优化
 
 ---
 

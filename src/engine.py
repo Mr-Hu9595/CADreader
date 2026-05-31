@@ -2,6 +2,7 @@
 
 基于PHT-CAD的工程图纸解析引擎
 集成了ezdxf_parser用于DXF/DWG文件解析
+集成了VLM增强用于智能图纸理解
 """
 
 import json
@@ -11,6 +12,7 @@ from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass, asdict
 
 from .parsers import DWGParser, DeviceExtractor, TopologyBuilder, CoordExtractor
+from .vlm_parser import DXFToImageRenderer, parse_with_vlm as vlm_parse_dxf
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ class CADReader:
     """工程图纸智能解析引擎
 
     基于PHT-CAD的VLM驱动图纸理解系统
+    支持多种解析模式：规则引擎、VLM智能分析、混合模式
     """
 
     def __init__(self, model_path: Optional[str] = None, device: str = "cuda"):
@@ -88,6 +91,7 @@ class CADReader:
         self.device = device
         self.model = None
         self._initialized = False
+        self._vlm_renderer = None
 
     def initialize(self) -> None:
         """初始化模型（延迟加载）"""
@@ -109,6 +113,13 @@ class CADReader:
 
         except ImportError as e:
             raise RuntimeError(f"请先安装依赖: pip install transformers torch - {e}")
+
+    @property
+    def vlm_renderer(self) -> DXFToImageRenderer:
+        """获取VLM渲染器（延迟初始化）"""
+        if self._vlm_renderer is None:
+            self._vlm_renderer = DXFToImageRenderer()
+        return self._vlm_renderer
 
     def parse(self, input_path: Union[str, Path]) -> ParsedDrawing:
         """解析工程图纸
@@ -227,6 +238,51 @@ class CADReader:
                 "annotation_count": len(annotations)
             }
         )
+
+    def parse_with_vlm(self, dxf_path: Union[str, Path], output_dir: Optional[str] = None) -> Dict:
+        """使用VLM增强解析DXF图纸
+
+        Args:
+            dxf_path: DXF文件路径
+            output_dir: 输出目录（可选）
+
+        Returns:
+            Dict: VLM解析结果（包含设备、尺寸、标注等）
+        """
+        return vlm_parse_dxf(str(dxf_path), output_dir)
+
+    def parse_to_image(self, input_path: Union[str, Path], output_path: Optional[str] = None) -> str:
+        """将图纸渲染为图像（用于VLM分析）
+
+        Args:
+            input_path: 输入文件路径（DXF/PDF/图像）
+            output_path: 输出图像路径（可选）
+
+        Returns:
+            str: 渲染后的图像路径
+        """
+        path = Path(input_path)
+        suffix = path.suffix.lower()
+
+        if suffix == '.dxf':
+            if output_path is None:
+                output_path = str(path.with_suffix('.png'))
+            return self.vlm_renderer.render(str(path), output_path)
+        elif suffix in ['.pdf']:
+            # PDF转图像
+            import fitz  # PyMuPDF
+            doc = fitz.open(str(path))
+            page = doc[0]
+            pix = page.get_pixmap(dpi=150)
+            if output_path is None:
+                output_path = str(path.with_suffix('.png'))
+            pix.save(output_path)
+            doc.close()
+            return output_path
+        elif suffix in ['.jpg', '.jpeg', '.png', '.bmp']:
+            return str(path)
+        else:
+            raise ValueError(f"不支持的文件格式: {suffix}")
 
     def _parse_pdf(self, path: Path) -> ParsedDrawing:
         """解析PDF格式图纸
