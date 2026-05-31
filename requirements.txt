@@ -1,0 +1,13 @@
+# CADreader dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.36.0
+ezdxf>=1.2.0
+pymupdf>=1.23.0
+pillow>=10.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+gradio>=4.0.0
+click>=8.0.0
+pyyaml>=6.0
