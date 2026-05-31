@@ -112,19 +112,42 @@ print(result)
 # }
 ```
 
-### 2. 批量解析
-
-```bash
-python scripts/batch_parse.py --input ./drawings/ --output ./results/
-```
-
-### 3. 集成到飞书
+### 2. VLM智能解析 + 飞书上传统
 
 ```python
-from cadreader.integrator import FeishuConnector
+from cadreader import CADReader
+from cadreader.integration import FeishuConnector
 
+reader = CADReader()
 connector = FeishuConnector()
-connector.upload_result(result, doc_id="<飞书文档ID>")
+
+# 1. VLM解析图纸
+vlm_result = reader.parse_with_vlm("雾炮塔架.dxf", output_dir="./output")
+
+# 2. 上传到飞书
+doc = connector.parse_and_upload_vlm_result(
+    vlm_result.get("vlm_result", {}),
+    title="雾炮塔架解析报告"
+)
+print(f"飞书文档: {doc.url}")
+
+# 3. 创建设备清单报告
+doc2 = connector.create_device_report(
+    devices=[{"id": "T001", "name": "测试设备", "spec": "规格A"}],
+    title="设备清单"
+)
+```
+
+### 3. 列出知识库节点
+
+```python
+connector = FeishuConnector()
+spaces = connector.list_spaces()
+for space in spaces:
+    print(f"空间: {space['name']} ({space['space_id']})")
+    nodes = connector.list_nodes(space_id=space['space_id'])
+    for node in nodes:
+        print(f"  - {node.get('title')}")
 ```
 
 ---
@@ -152,10 +175,11 @@ connector.upload_result(result, doc_id="<飞书文档ID>")
 - [x] 实现DXF解析功能 - 使用DWGParser集成到CADReader._parse_dxf()
 - [x] 实现VLM增强解析 - 使用MiniMax understand_image解析DXF图像
 - [x] 解决中文字体问题 - 使用Microsoft YaHei字体支持中文渲染
-- [ ] 实现PDF解析功能 - PDF转图像 + VLM分析
-- [ ] 开发与FeiShuCLI的集成接口
+- [x] 实现PDF解析功能 - PDF转图像 + VLM分析
+- [x] 开发飞书集成 - FeishuConnector实现文档创建和更新
 - [ ] 测试与现有skills的集成
-- [ ] 编写使用文档和API文档
+- [ ] 完善错误处理和日志
+- [ ] 编写API文档
 
 ---
 
