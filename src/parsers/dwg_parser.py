@@ -24,7 +24,7 @@ class DWGParser:
     def close(self):
         """关闭DWG文件"""
         if self.doc:
-            self.doc.close()
+            # ezdxf的Drawing对象没有close()方法
             self.doc = None
             self.modelspace = None
 
@@ -58,10 +58,12 @@ class DWGParser:
                 'rotation': entity.dxf.rotation,
                 'attribs': {}
             }
-            # 提取属性
-            if entity.has_attributes:
-                for attr in entity.get_attributes():
-                    block_info['attribs'][attr.dxf.tag] = attr.dxf.text
+            # 提取属性（ezdxf使用get_attribs()方法）
+            try:
+                for attr in entity.get_attribs():
+                    block_info['attribs'][attr.dxf.text] = attr.dxf.layer
+            except Exception:
+                pass
             blocks.append(block_info)
         return blocks
 
